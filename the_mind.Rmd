@@ -1,0 +1,286 @@
+---
+title: "the_mind"
+author: "Sebastian Deri"
+date: "11/5/2020"
+output: html_document
+---
+# Settings
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. MAKE FUNCTION
+
+```{r}
+mind_prob <- function(your_hand,
+                      last_pile,
+                      other_n,
+                      sims_n,
+                      print_iter) {
+  
+  # 1. INFO
+  # 1.1 your lowest card
+  your_lowest <- min(your_hand)
+  # 1.2. possible cards that could be in other player(s)' hand(s)
+  
+  # cards to get rid of, based on last card on pile
+  if (last_pile == 0){
+    get_rid <- 0
+  } else if (last_pile >= 1) {
+    get_rid <- last_pile:1
+  }
+  
+  possible_cards <- setdiff(1:100, c(your_hand, get_rid))
+  
+  # info to display, if testing
+  if(print_iter == TRUE){
+    print("possible_cards:")
+    print(possible_cards)
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~")
+  }
+
+  # 2. CALCULATE PROBABILITIES
+  # 2.1. first, get rid of impossible case #1: 
+  # -- there are more cards in total (your hand + other player(s) hand(s)) than remain (# from last pile card to 100)
+  if ( (length(your_hand) + other_n) > length((last_pile+1):100)){
+    return(NA)
+  }
+  # 2.X. next, get rid of lost round #2:
+  # -- if any card in your hand is lower than last card on pile
+  else if (any(your_hand <= last_pile)){
+    return(NA)
+  }
+  # 2.3. prob of lowest card, if no other player(s) have card(s)
+  else if (other_n == 0){
+    prob <- 100
+    return(prob)
+  }
+  # 2.Y. don't go through loop if your lowest card is the card right after last card on pile
+  else if (your_lowest == (last_pile+1)){
+    prob <- 100
+    return(prob)
+    
+  }
+  # ----------------------------
+  # 2.4. prob of lowest card, if there are no other possible lower cards for other player(s) to have
+  #else if (length(possible_cards) == 0){
+  #  prob <- 100
+  #  return(prob)
+  #}
+  # ----------------------------
+  
+  # 2.5. prob of you having lowest card, if you know opponents only other card
+  else if(length(possible_cards) == 1){
+    prob <- ifelse(your_lowest < possible_cards, 100, 0)
+
+    # ----------------------------
+    #if (your_lowest < possible_cards){
+    #  prob <- 100
+    #} else if (your_lowest > possible_cards){
+    #  prob <- 0
+    #}
+    # ----------------------------
+    return(prob)
+  }
+  # 2.3. prob of lowest card, if other player(s) can have lower cards
+  else {
+    # counter for amount of time you had lowest card
+    tally <- 0
+
+    for (i in 1:sims_n){
+      # simulate unknown cards
+      # note: behavior of sample, when x is vector of length 1 (does c(1:x) not c(x))
+      unknown_cards <- sample(x = possible_cards,
+                              size = other_n,
+                              replace = FALSE)
+      
+      # info to display, if testing
+      if(print_iter == TRUE){
+          print(paste0("i: ", i))
+          print(c("your_hand (sorted):", sort(your_hand)))
+          print(c("unknown_cards (sorted):", sort(unknown_cards)), collapse=" ")
+          }
+  
+      # if your card lower than all other unknown cards, increment tally
+      if (all(your_lowest < unknown_cards)){
+        tally <- tally + 1
+        
+        # info to display, if testing
+        if(print_iter == TRUE){
+          print(all(your_lowest < unknown_cards))
+          }
+        }
+  
+      # info to display, if testing
+      if(print_iter == TRUE){
+        print(paste0("current_tally:", tally))
+        print("-------------------------")
+        }
+      } # FOR LOOP ENDS
+    }
+  
+  # 3. FINAL CALCULATIONS
+  # probability your card being lowest: number of times it was lowest, out of all simulations
+  prob <- tally/sims_n*100
+  
+  # info to display, if testing
+  if(print_iter == TRUE){
+    print(paste0("FINAL PROB: ", prob))
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~")
+  }
+  
+  # 4. FINAL OUTPUT
+  # function's final output: probability your card was the lowest
+  return(prob)
+    
+}
+
+```
+
+
+# 2. RUN FUNCTION
+
+```{r}
+mind_prob(your_hand = c(10, 66),
+          last_pile = 7,
+          other_n = 4,
+          sims_n = 1000000,
+          print_iter = FALSE)
+```
+
+
+# 3. GENERATE TABLE
+
+The goal here is to create a table of probabilities of having the lowest card across these situations
+- your_lowest: all cards from 1 to 100
+- last card in pile: all cards from 0 to 100 (excluding your card)
+- total cards in your hand: can be anything from 1 to 12
+- total cards in other(s)' hands: can be anything from 0 to 36 (four max players, including your, round 12 = 12 cards each)
+
+## 3.1. create data frame
+
+```{r}
+max_rows <- length(1:100) * length(0:100) * length(1:12) * length(0:36)
+
+n_rows <- 0
+for (your_lowest in 1:100){
+  for (last_pile in 0:(your_lowest-1)){
+    for (your_hand_size in 1:5){
+      for (other_hand_size in 1:5){
+        n_rows <- n_rows + 1
+      }
+    }
+  }
+}
+
+prob_table <- 
+  data.frame(your_lowest = numeric(n_rows),
+             last_pile = numeric(n_rows),
+             your_hand_size = numeric(n_rows),
+             other_hand_size = numeric(n_rows),
+             prob_you_lowest = numeric(n_rows))
+
+max_rows
+n_rows
+prob_table
+```
+
+
+## 3.2. calculate table values
+
+```{r}
+row_i <- 0
+
+for (your_lowest in 1:100){
+  for (last_pile in 0:(your_lowest-1)){
+    for (your_hand_size in 1:5){
+      for (other_hand_size in 1:5){
+        
+        row_i <- row_i + 1
+
+        if (your_hand_size == 1){
+          rest_of_hand <- numeric(0)
+          prob_i <-
+             mind_prob(your_hand = your_lowest,
+                      last_pile = last_pile,
+                      other_n = other_hand_size,
+                      sims_n = 1000,
+                      print_iter = FALSE)
+          }
+        else if (your_hand_size > 1){
+          probs_vec <- NA         
+          for (hand_sim_i in 1:1000){
+ 
+            rest_of_hand <- sample(x = setdiff(1:100, your_lowest),
+                                   size = your_hand_size-1,
+                                   replace = FALSE)
+            probs_vec[hand_sim_i] <-
+             mind_prob(your_hand = c(your_lowest, rest_of_hand),
+                      last_pile = last_pile,
+                      other_n = other_hand_size,
+                      sims_n = 1000,
+                      print_iter = FALSE)
+          }
+          prob_i <- mean(probs_vec, na.rm = TRUE)
+         }
+        
+        prob_table[row_i, "your_lowest"] <- your_lowest
+        prob_table[row_i, "last_pile"] <- last_pile
+        prob_table[row_i, "your_hand_size"] <- your_hand_size
+        prob_table[row_i, "other_hand_size"] <- other_hand_size
+        prob_table[row_i, "prob_you_lowest"] <- prob_i
+
+      }
+    }
+  }
+}
+
+
+# immediately save after running, since leaving on over night
+# save as R data file
+save(prob_table,
+     file = "the_mind_prob_table_OVERNIGHT.Rda")
+
+# also save as csv (for non R users)
+write.csv(prob_table,
+          file = "the_mind_prob_table_OVERNIGHT.csv")
+```
+
+## 3.3. view table
+
+```{r}
+prob_table
+View(prob_table)
+```
+
+## 3.4.XXX. table misc.
+
+```{r}
+prob_table_1 <- prob_table[1:12000,]
+View(prob_table_1)
+```
+
+## 3.5. save table
+
+```{r}
+# save as R data file
+save(prob_table_1,
+     file = "the_mind_prob_table.Rda")
+
+# also save as csv (for non R users)
+write.csv(prob_table_1,
+          file = "the_mind_prob_table.csv")
+```
+
+
+# END/MISC
+
+```{r}
+mind_prob(your_hand = c(60, 70),
+          last_pile = 44,
+          other_n = 9,
+          sims_n = 100000,
+          print_iter = FALSE)
+```
+
